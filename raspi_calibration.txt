@@ -1,0 +1,95 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 18 10:11:22 2018
+
+@author: FarineauA
+"""
+
+import numpy as np
+import cv2
+import glob
+
+# Termination criteria for sub pixel corners refinement --> see cv.cornerSubPix
+# EPS = EPSILON = the desired accuracy or change in parameters at which the iterative algorithm stops
+# MAX_ITER / COUNT = the maximum number of iterations or elements to compute
+criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+## This whole part is just telling the code to find the inner corners of the chessboard
+## a.k.a. real world points and corresponding image points
+#prepare object points, like (0,0,0), (1,0,0), (2,0,0)....,(6,5,0)
+#Sample Chessboard (inner corners remember!) = (9, 6)
+objp = np.zeros((9*6,3), np.float32)
+objp[:,:2] = np.mgrid[0:6,0:9].T.reshape(-1,2)
+
+# Arrays to store object points and image points from all the images
+objpoints = [] #3D points in real world space
+imgpoints = [] #2D points in image plane
+
+#I guess glob is sorta like creating your workspace environment ie path to folder in arcpy?
+#From the docs: the glob module finds all the pathnames matching a specified pattern according to the rules used by the Unix shell,
+#although results are returned in arbitrary order
+#glob.glob(pathname)
+images = glob.glob('C:/Users/FarineauA/Desktop/PRACTISE/RaspberryPi_Chessboard/*.jpg')
+
+for fname in images:
+    img = cv2.imread(fname)
+    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    
+    #Find chessboard corners
+    #cv2.findChessboardCorners(image,patternSize[,corners[,flags]])
+    ret, corners = cv2.findChessboardCorners(gray, (6,9), None)
+    
+    #If found, add object points, image points (after refining them)
+    if ret == True:
+        objpoints.append(objp)
+        # cv2.cornerSubPix increases the accuracy of finding the corners
+        corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
+        imgpoints.append(corners2)
+        
+        #Draw and display the corners
+        img = cv2.drawChessboardCorners(img, (6,9), corners2, ret)
+        cv2.imshow('img',img)
+        cv2.waitKey(500)
+        
+        cv2.destroyAllWindows()
+
+##This part is finding all the goodies: camera matrix (see: focal length, optical centre, skew coefficient), 
+##distortion coefficients (see: radial/tangential distortion), and 
+##extrinsic parameters (rotation and translation vectors)
+
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1],None,None)
+
+##NOW we can finally get to undistorting the images we need to use for plant calcs
+##We take an image and undistort it but FIRST we want to refine the matrix (I guess it makes it more accurate?)
+##by using cv2.getOptimalNewCameraMatrix(). Alpha = 0 means taking away some pixels at image corners. 
+##Alpha = 1 means all pixels are kept.
+
+#take a new image 
+img = cv2.imread('image2.jpg')
+h, w = img.shape[:2]
+newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+
+#Undistort using cv2.undistort() which is option 1 of 2 in opencv : the other option is cv2.remap 
+dst = cv2.undistort(img,mtx,dist,None,newcameramtx)
+
+#Crop the image - but why??
+x,y,w,h = roi
+dst = dst[y:y+h, x:x+w]
+cv2.imwrite('calibrated.png',dst)
+
+##Lastly we want to store the camera matrix and distortion coefficients that we found in a previous step so we can use them 
+##in the future whenever we take more pictures with the same camera using Numpy write functions like 
+##np.savez and np.savetxt etc.
+#numpy.savez(file, *args, **kwds): saves several arrays into a single file in uncompressed .npz format
+#numpy.savetxt(fname, X, fmt=%.18e', delimiter='', newline='\n', header=", footer=", comments='#', encoding=None)
+
+np.savetxt('matrix.txt',mtx, delimiter=',')
+np.savetxt('dist_coefficients.txt',dist,delimiter=' ')
+
+)
+
+
+
+
+
+

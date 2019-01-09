@@ -1,0 +1,31 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jan  8 17:38:27 2019
+
+@author: FarineauA
+"""
+
+import cv2
+import glob
+import os
+
+images = glob.glob("C:/Users/FarineauA/Desktop/SEED_TRAYS_NOV_29_2018/seed_images")
+mtx = "C:/Users/FarineauA/Desktop/Camera_Calibration/RaspberryPi_Chessboard/matrix.txt"
+dist = "C:/Users/FarineauA/Desktop/Camera_Calibration/RaspberryPi_Chessboard/dist_coefficients.txt"
+
+for fname in images:
+    #Read in the images
+    img = cv2.imread(fname)
+    #Not sure what this does
+    h, w = img.shape[:2]
+    newcameramtx, roi=cv2.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
+    #undistort the images
+    dst = cv2.undistort(img,mtx,dist,None,newcameramtx)
+    #crop the images
+    x,y,w,h = roi
+    dst = dst[y:y+h, x:x+w]
+    #save the images with new names
+    outRaster = os.path.join(img, "c_" + img)
+    cv2.imwrite(outRaster,dst)
+    
+    
